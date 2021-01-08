@@ -3,6 +3,7 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 import torch.nn.functional as F
+from torch.autograd import Variable
 from data import get_dataloader
 from models import model_dict
 import os
@@ -10,8 +11,8 @@ from utils import AverageMeter, accuracy
 import numpy as np
 from datetime import datetime
 
-# torch.backends.cudnn.benchmark = True
-# torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.deterministic = True
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--T', type=float, default=4.0)  # temperature
@@ -38,8 +39,8 @@ args.num_branch = len(args.model_names)
 
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
-# torch.cuda.manual_seed(args.seed)
-# os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
+torch.cuda.manual_seed(args.seed)
+os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
 
 exp_name = '_'.join(args.model_names)
 exp_path = './experiments/{}/{}'.format(exp_name, datetime.now().strftime('%Y-%m-%d-%H-%M'))
@@ -58,7 +59,8 @@ def train_one_epoch(models, optimizers, train_loader):
 
     for i, (imgs, label) in enumerate(train_loader):
         # torch.Size([batch, num_model, 3, 32, 32]) torch.Size([64])
-        outputs = torch.zeros(size=(len(models), imgs.size(0), 100), dtype=torch.float)
+        outputs = torch.zeros(size=(len(models), imgs.size(0), 100), dtype=torch.float).cuda()
+        out_list = []
         # forward
         for model_idx, model in enumerate(models):
 
@@ -68,25 +70,30 @@ def train_one_epoch(models, optimizers, train_loader):
 
             out = model.forward(imgs[:, model_idx, ...])
             outputs[model_idx, ...] = out
+            out_list.append(out)
 
         # backward
         stable_out = outputs.sum(dim=0)
         stable_out = stable_out.detach()
-        msg = ""
+
         for model_idx, model in enumerate(models):
-            ce_loss = F.cross_entropy(outputs[model_idx], label)
+            ce_loss = F.cross_entropy(out_list[model_idx], label)
             div_loss = F.kl_div(
-                F.log_softmax(outputs[model_idx] / args.T, dim=1),
+                F.log_softmax(out_list[model_idx] / args.T, dim=1),
                 F.softmax(stable_out / args.T, dim=1),
                 reduction='batchmean'
             ) * args.T * args.T
 
             loss = (1 - args.alpha) * ce_loss + (args.alpha) * div_loss
-            loss.backward(retain_graph=True)
+            if model_idx < len(models) - 1:
+                loss.backward(retain_graph=True)
+            else:
+                loss.backward()
+
             optimizers[model_idx].step()
 
             loss_recorder_list[model_idx].update(loss.item(), n=imgs.size(0))
-            acc = accuracy(outputs[model_idx], label)[0]
+            acc = accuracy(out_list[model_idx], label)[0]
             acc_recorder_list[model_idx].update(acc.item(), n=imgs.size(0))
 
     losses = [recorder.avg for recorder in loss_recorder_list]
@@ -124,7 +131,7 @@ def train(model_list, optimizer_list, train_loader, scheduler_list):
     for epoch in range(args.epoch):
         train_losses, train_acces = train_one_epoch(model_list, optimizer_list, train_loader)
         val_losses, val_acces = evaluation(model_list, val_loader)
-        
+
         for i in range(len(best_acc)):
             if val_acces[i] > best_acc[i]:
                 best_acc[i] = val_acces[i]

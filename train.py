@@ -136,7 +136,7 @@ def train(model_list, optimizer_list, train_loader, scheduler_list):
             if val_acces[i] > best_acc[i]:
                 best_acc[i] = val_acces[i]
                 state_dict = dict(epoch=epoch + 1, model=model_list[i].state_dict(), acc=val_acces[i])
-                name = os.path.join(exp_path, args.model_name[i], 'ckpt', 'best.pth')
+                name = os.path.join(exp_path, args.model_names[i], 'ckpt', 'best.pth')
                 os.makedirs(os.path.dirname(name), exist_ok=True)
                 torch.save(state_dict, name)
 
@@ -144,10 +144,10 @@ def train(model_list, optimizer_list, train_loader, scheduler_list):
 
         if (epoch + 1) % args.print_freq == 0:
             for j in range(len(best_acc)):
-                print("model:{} train loss:{:.2f} acc:{:.2f}  val loss{:.2f} acc:{:.2f}".format(args.model_name[j], train_losses[j], train_acces[j], val_losses[j], val_acces[j]))
+                print("model:{} train loss:{:.2f} acc:{:.2f}  val loss{:.2f} acc:{:.2f}".format(args.model_names[j], train_losses[j], train_acces[j], val_losses[j], val_acces[j]))
 
     for k in range(len(best_acc)):
-        print("model:{} best acc:{:.2f}".format(args.model_name[k], best_acc[k]))
+        print("model:{} best acc:{:.2f}".format(args.model_names[k], best_acc[k]))
 
 
 if __name__ == '__main__':

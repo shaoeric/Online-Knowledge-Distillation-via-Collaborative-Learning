@@ -135,7 +135,7 @@ def train(model_list, optimizer_list, train_loader, scheduler_list):
         for i in range(len(best_acc)):
             if val_acces[i] > best_acc[i]:
                 best_acc[i] = val_acces[i]
-                state_dict = dict(epoch=epoch + 1, model=model_list[i].state_dict(), acc=val_acces[i].avg)
+                state_dict = dict(epoch=epoch + 1, model=model_list[i].state_dict(), acc=val_acces[i])
                 name = os.path.join(exp_path, args.model_name[i], 'ckpt', 'best.pth')
                 os.makedirs(os.path.dirname(name), exist_ok=True)
                 torch.save(state_dict, name)

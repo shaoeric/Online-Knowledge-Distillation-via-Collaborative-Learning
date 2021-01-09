@@ -3,7 +3,6 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 import torch.nn.functional as F
-from torch.autograd import Variable
 from data import get_dataloader
 from models import model_dict
 import os
@@ -16,7 +15,7 @@ torch.backends.cudnn.deterministic = True
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--T', type=float, default=4.0)  # temperature
-parser.add_argument('--model_names', type=str, nargs='+', default=['resnet56', 'resnet32'])
+parser.add_argument('--model_names', type=str, nargs='+', default=['resnet20', 'resnet20'])
 parser.add_argument('--alpha', type=float, default=0.5)  # weight for ce and kl
 
 parser.add_argument('--root', type=str, default='dataset')
@@ -45,20 +44,19 @@ os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
 exp_name = '_'.join(args.model_names)
 exp_path = './experiments/{}/{}'.format(exp_name, datetime.now().strftime('%Y-%m-%d-%H-%M'))
 os.makedirs(exp_path, exist_ok=True)
-
+print(exp_path)
 
 
 def train_one_epoch(models, optimizers, train_loader):
     acc_recorder_list = []
     loss_recorder_list = []
-    for model, optimizer in zip(models, optimizers):
+    for model in models:
         model.train()
-        optimizer.zero_grad()
         acc_recorder_list.append(AverageMeter())
         loss_recorder_list.append(AverageMeter())
 
     for i, (imgs, label) in enumerate(train_loader):
-        # torch.Size([batch, num_model, 3, 32, 32]) torch.Size([64])
+        # torch.Size([batch, num_model, 3, 32, 32]) torch.Size([batch])
         outputs = torch.zeros(size=(len(models), imgs.size(0), 100), dtype=torch.float).cuda()
         out_list = []
         # forward
@@ -73,7 +71,7 @@ def train_one_epoch(models, optimizers, train_loader):
             out_list.append(out)
 
         # backward
-        stable_out = outputs.sum(dim=0)
+        stable_out = outputs.mean(dim=0)
         stable_out = stable_out.detach()
 
         for model_idx, model in enumerate(models):
@@ -85,6 +83,8 @@ def train_one_epoch(models, optimizers, train_loader):
             ) * args.T * args.T
 
             loss = (1 - args.alpha) * ce_loss + (args.alpha) * div_loss
+
+            optimizers[model_idx].zero_grad()
             if model_idx < len(models) - 1:
                 loss.backward(retain_graph=True)
             else:
@@ -135,7 +135,8 @@ def train(model_list, optimizer_list, train_loader, scheduler_list):
         for i in range(len(best_acc)):
             if val_acces[i] > best_acc[i]:
                 best_acc[i] = val_acces[i]
-                state_dict = dict(epoch=epoch + 1, model=model_list[i].state_dict(), acc=val_acces[i])
+                state_dict = dict(epoch=epoch + 1, model=model_list[i].state_dict(),
+                                  acc=val_acces[i])
                 name = os.path.join(exp_path, args.model_names[i], 'ckpt', 'best.pth')
                 os.makedirs(os.path.dirname(name), exist_ok=True)
                 torch.save(state_dict, name)
@@ -144,7 +145,9 @@ def train(model_list, optimizer_list, train_loader, scheduler_list):
 
         if (epoch + 1) % args.print_freq == 0:
             for j in range(len(best_acc)):
-                print("model:{} train loss:{:.2f} acc:{:.2f}  val loss{:.2f} acc:{:.2f}".format(args.model_names[j], train_losses[j], train_acces[j], val_losses[j], val_acces[j]))
+                print("model:{} train loss:{:.2f} acc:{:.2f}  val loss{:.2f} acc:{:.2f}".format(
+                    args.model_names[j], train_losses[j], train_acces[j], val_losses[j],
+                    val_acces[j]))
 
     for k in range(len(best_acc)):
         print("model:{} best acc:{:.2f}".format(args.model_names[k], best_acc[k]))
@@ -160,7 +163,8 @@ if __name__ == '__main__':
         model = model_dict[name](num_classes=100)
         if torch.cuda.is_available(): model = model.cuda()
 
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=args.momentum,
+                              weight_decay=args.weight_decay)
         scheduler = MultiStepLR(optimizer, args.milestones, args.gamma)
         model_list.append(model)
         optimizer_list.append(optimizer)

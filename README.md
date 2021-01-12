@@ -34,10 +34,10 @@ A simple reimplement Online Knowledge Distillation via Collaborative Learning wi
 |   vgg13    |     vgg8     | 74.64/70.36 | 76.53/72.94 |
 |   vgg13    | MobileNetV2  | 74.64/64.6  | 76.62/67.45 |
 |  ResNet50  | MobileNetV2  | 79.34/64.6  | 79.83/67.64 |
-|  ResNet50  |     vgg8     | 79.34/70.36 |             |
-| resnet32x4 | ShuffleNetV1 | 79.42/70.5  |             |
-| resnet32x4 | ShuffleNetV2 | 79.42/71.82 |             |
-|  wrn_40_2  | ShuffleNetV1 | 75.61/70.5  |             |
+|  ResNet50  |     vgg8     | 79.34/70.36 | 80.46/73.03 |
+| resnet32x4 | ShuffleNetV1 | 79.42/70.5  | 80.31/74.32 |
+| resnet32x4 | ShuffleNetV2 | 79.42/71.82 | 80.16/75.35 |
+|  wrn_40_2  | ShuffleNetV1 | 75.61/70.5  | 77.53/74.79 |
 
 
 
